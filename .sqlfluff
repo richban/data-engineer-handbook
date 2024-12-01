@@ -1,0 +1,10 @@
+# .sqlfluff
+[sqlfluff]
+dialect = postgres  # Set the SQL dialect to PostgreSQL
+
+[sqlfluff:rules:layout.indent]  # Updated rule for indentation
+indent_unit = space  # Use spaces for indentation
+tab_space_size = 4   # Ensure this is an integer
+
+[sqlfluff:rules:layout.long_lines]  # Updated rule for line length
+max_line_length = 80  # Set a maximum line length if desired
