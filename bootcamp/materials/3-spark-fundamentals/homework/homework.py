@@ -101,13 +101,24 @@ def perform_analysis(spark: SparkSession, match_details: DataFrame, matches: Dat
         tuple: A tuple containing DataFrames for player_kills_avg, playlist_popularity,
         map_popularity, and killing_spree_map.
     """
+    # Write DataFrames with bucketing
+    match_details.write.bucketBy(16, "match_id").sortBy("match_id").mode("overwrite").saveAsTable("bucketed_match_details")
+    matches.write.bucketBy(16, "match_id").sortBy("match_id").mode("overwrite").saveAsTable("bucketed_matches")
+    medal_matches_players.write.bucketBy(16, "match_id").sortBy("match_id").mode("overwrite").saveAsTable("bucketed_medal_matches_players")
+
+    # Read bucketed tables
+    bucketed_match_details = spark.table("bucketed_match_details")
+    bucketed_matches = spark.table("bucketed_matches")
+    bucketed_medal_matches_players = spark.table("bucketed_medal_matches_players")
+
+    # Perform bucket join
+    joined_df = bucketed_match_details.join(bucketed_matches, "match_id", "inner") \
+        .join(bucketed_medal_matches_players, ["match_id", "player_gamertag"], "inner") \
+        # .repartition(16, "match_id")
+
     # Broadcast small tables
     medals_broadcast = broadcast(medals)
     maps_broadcast = broadcast(maps)
-
-    joined_df = match_details.join(matches, "match_id", "inner") \
-        .join(medal_matches_players, ["match_id", "player_gamertag"], "inner") \
-        .repartition(16, "match_id")
 
     # 1. Which player averages the most kills per game?
     player_kills_avg = joined_df.groupBy("player_gamertag") \
@@ -122,7 +133,7 @@ def perform_analysis(spark: SparkSession, match_details: DataFrame, matches: Dat
         .orderBy(col("match_count").desc())
 
     # 3. Which map gets played the most?
-    map_popularity = joined_df.join(maps_broadcast, matches.mapid == maps_broadcast.mapid) \
+    map_popularity = joined_df.join(maps_broadcast, joined_df.mapid == maps_broadcast.mapid) \
         .groupBy(maps_broadcast.name) \
         .agg(count("match_id").alias("match_count")) \
         .orderBy(col("match_count").desc())
